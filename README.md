@@ -116,3 +116,341 @@ CloudWatch supports a wide range of features, including:
 * Dashboards: CloudWatch provides customizable dashboards that allow users to visualize and monitor metrics and logs in real-time.
 
 CloudWatch can be accessed using a variety of APIs and SDKs, including the AWS Management Console, the AWS CLI, and the AWS SDKs for popular programming languages such as Node.js, Python, Java, and more. CloudWatch provides a powerful and flexible monitoring and observability service that is essential for operating and maintaining modern cloud applications and infrastructure.
+
+## Create Application
+
+We will now go over the steps to set up the application you see in the demo above. IaC is the main focus. I will show the code and AWS CLI commands that are necessary but I will not explain them in detail since that is not the purpose of this blog. I’ll focus on the Terraform definitions instead. 
+You are welcome to follow along by cloning the repository that I linked to in this blog post.
+
+### PREREQUISITES
+
+* Install Terraform
+* Install AWS CLI
+* Checkout the repository on GitLab: https://github.com/microtema/serverless-terraform.git
+* Be ready to get your mind blown by IaC
+
+#### Terraform Basic
+
+The main things you’ll be configuring with Terraform are resources. 
+Resources are the components of your application infrastructure. 
+E.g: a Lambda Function, an API Gateway Deployment, a DynamoDB database, … A resource is defined by using the keyword resource followed by the type and the name. 
+The name can be arbitrarily chosen. 
+The type is fixed. For example: resource "aws_dynamodb_table" "product-dynamodb-table"
+
+To follow along with this blog post you have to know two basic Terraform commands.
+
+```
+terraform apply
+```
+
+Terraform apply will start provisioning all the infrastructure you defined. Your databases will be created. 
+Your Lambda Functions will be set up. The API Gateway will be set in place.
+
+```
+terraform destroy
+```
+
+Terraform destroy will remove all the infrastructure that you have set up in the cloud. 
+If you are using Terraform correctly you should not have to use this command. 
+However should you want to start over, you can remove all the existing infrastructure with this command. 
+No worries, you will still have all the infrastructure neatly described on your machine because you are using Infrastructure as Code.
+
+#### DATABASE: DYNAMODB
+
+Let’s start with the basis. Where will all our coding tips be stored? That’s right, in the database. This database is part of our infrastructure
+
+```
+resource "aws_dynamodb_table" "product_table" {
+  name         = "PRODUCT"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "product_id"
+
+  attribute {
+    name = "product_id"
+    type = "S"
+  }
+  attribute {
+    name = "category"
+    type = "S"
+  }
+  attribute {
+    name = "product_rating"
+    type = "N"
+  }
+
+  global_secondary_index {
+    name            = "ProductCategoryRatingIndex"
+    hash_key        = "category"
+    range_key       = "product_rating"
+    projection_type = "ALL"
+  }
+}
+```
+
+Since Dynamo is a NoSQL database, we don’t have to specify all attributes upfront. The only thing we have to provide are the elements that AWS will use to build the partition key with. When you provide a hash key as well as a sort key, AWS will combine these to make a unique partition key. Mind the word UNIQUE. Make sure this combination is unique.
+
+> DynamoDB uses the partition key value as input to an internal hash function. The output from the hash function determines the partition (physical storage internal to DynamoDB) in which the item will be stored. All items with the same partition key value are stored together, in sorted order by sort key value. – from AWS docs: DynamoDB Core Components
+
+From the attribute definitions in dynamo.tf it is clear that category (S) is a string and Date (N) should be a number.
+
+### IAM
+
+Before specifying the Lambda Functions we have to create permissions for our functions to use. This makes sure that our functions have permissions to access other resources (like DynamoDB). Without going too deep into it, the AWS permission model works as follows:
+
+* Provide a resource with a role
+* Add permissions to this role
+* These allow the role to access other resources:
+  * permissions for triggering another resource (eg. Lambda Function forwards logs to CloudWatch)
+  * permissions for being triggered by another resource (eg. Lambda Function may be triggered by API Gateway)
+
+```
+resource "aws_iam_role" "product" {
+  name               = "ProductLambdaRole"
+  assume_role_policy = jsonencode({
+    Version   = "2012-10-17"
+    Statement = [
+      {
+        Action    = "sts:AssumeRole"
+        Effect    = "Allow"
+        Sid : ""
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+```
+
+### IAM Policy
+
+In the example above, the first resource that is defined is an aws_iam_role. This is the role that we will later give to our Lambda Functions.
+
+```
+data "template_file" "product_lambda_policy" {
+  template = "${file("${path.module}/policy.json")}"
+}
+
+resource "aws_iam_policy" "product" {
+  name        = "ProductLambdaPolicy"
+  path        = "/"
+  description = "IAM policy for Product lambda functions"
+  policy      = data.template_file.product_lambda_policy.rendered
+}
+
+resource "aws_iam_role_policy_attachment" "product" {
+  role       = aws_iam_role.product.name
+  policy_arn = aws_iam_policy.product.arn
+}
+```
+
+#### policy.json
+```
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogStream",
+        "logs:CreateLogGroup",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:*:*:*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:PutItem",
+        "dynamodb:GetItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:Query"
+      ],
+      "Resource": "arn:aws:dynamodb:*:*:table/PRODUCT"
+    }
+  ]
+}
+```
+
+We then create the aws_iam_role_policy resource which we link to the aws_iam_role. The first aws_iam_role_policy is giving this role permission to invoke any action on the specified DynamoDB resource. The second role_policy allows a resource with this role to send logs to CloudWatch.
+
+A couple of things to notice:
+
+* The aws_iam_role and the aws_iam_role_policy are connected by the role argument of the role_policy resource
+* In the statement attribute of the aws_iam_role_policy we grant (Effect attr.) permission to do some actions (Action attr.) on a certain resource (Resource attr.)
+* A resource is referenced by its ARN or Amazon Resource Name which uniquely identifies this resource on AWS
+* There are two ways to specify an aws_iam_role_policy:
+  * using the until EOF syntax (like I did here)
+  using a separate Terraform aws_iam_policy_document element that is coupled to the aws_iam_role_policy
+  * The dynamodb-lambda-policy allows all actions on the specified DynamoDB resource because under the Action attribute it states dynamodb:* You could make this more restricted and mention actions like
+
+> "dynamodb:Scan", "dynamodb:BatchWriteItem","dynamodb:PutItem"
+
+### LAMBDA FUNCTIONS
+
+There are four Lambda Functions that are part of this application. 
+
+#### The first Lambda is used to get or retrieve the product from the database further referenced as the getDocument. 
+
+```
+const AWS = require('aws-sdk');
+const docClient = new AWS.DynamoDB.DocumentClient();
+const TableName = process.env.TABLE_NAME;
+
+module.exports.handler = async (event) => {
+
+    const params = {
+        TableName,
+        Key: {...event.queryStringParameters}
+    }
+
+    try {
+        const data = await docClient.get(params).promise()
+        return {body: JSON.stringify(data.Item)}
+    } catch (e) {
+        return {error: "Unable to get document!", message: e.message}
+    }
+}
+```
+
+#### The second Lambda is used to post or send the product to the database.
+
+```
+const AWS = require('aws-sdk');
+const docClient = new AWS.DynamoDB.DocumentClient();
+const TableName = process.env.TABLE_NAME;
+
+module.exports.handler = async (event) => {
+
+    const Item = JSON.parse(event.body);
+
+    const params = {TableName, Item}
+
+    try {
+        await docClient.put(params).promise();
+        return {body: 'Successfully created item!'}
+    } catch (e) {
+        return {error: "Unable to create document!", message: e.message}
+    }
+}
+```
+
+### The third Lambda is used to delete or remove the product from the database.
+
+```
+const AWS = require('aws-sdk');
+const docClient = new AWS.DynamoDB.DocumentClient();
+const TableName = process.env.TABLE_NAME;
+
+module.exports.handler = async (event) => {
+
+    const params = {
+        TableName,
+        Key: {...event.queryStringParameters}
+    }
+
+    try {
+        await docClient.delete(params).promise()
+        return {
+            statusCode: 200,
+            body: JSON.stringify({message: "Item Deleted"}),
+        };
+    } catch (e) {
+        return {error: "Unable to delete document!", message: e.message}
+    }
+}
+```
+
+### The four Lambda is used to search or retrieve the products from the database.
+
+```
+const AWS = require('aws-sdk');
+const docClient = new AWS.DynamoDB.DocumentClient();
+const TableName = process.env.TABLE_NAME;
+
+module.exports.handler = async (event) => {
+
+    const {product_id} = event.queryStringParameters
+
+    const params = {
+        TableName,
+        KeyConditionExpression: '#name = :value',
+        ExpressionAttributeValues: {':value': product_id},
+        ExpressionAttributeNames: {'#name': 'product_id'}
+    }
+
+    try {
+        const data = await docClient.query(params).promise()
+        return {body: JSON.stringify(data.Items)}
+    } catch (e) {
+        return {error: "Unable to query document!", message: e.message}
+    }
+}
+```
+
+Notice that we tell Terraform the S3 Bucket and directory to look for the code
+We specify the runtime and memory for this Lambda Function
+index.handler points to the file and function where to enter the code
+The aws_iam_role resource is the permission that states that this Lambda Function may be invoked by the API Gateway that we created
+
+### API GATEWAY
+
+I kept the most difficult one for last. On the other hand, it is also the most interesting.
+
+```
+resource "aws_api_gateway_rest_api" "product" {
+  name        = "product"
+  description = "Product API Gateway"
+  endpoint_configuration {
+    types = ["REGIONAL"]
+  }
+}
+
+resource "aws_api_gateway_resource" "product" {
+  rest_api_id = aws_api_gateway_rest_api.product.id
+  parent_id   = aws_api_gateway_rest_api.product.root_resource_id
+  path_part   = "product"
+}
+```
+
+```
+resource "aws_api_gateway_method" "create_product" {
+  rest_api_id   = aws_api_gateway_rest_api.product.id
+  resource_id   = aws_api_gateway_resource.product.id
+  http_method   = "POST"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "create_product" {
+  rest_api_id             = aws_api_gateway_rest_api.product.id
+  resource_id             = aws_api_gateway_method.create_product.resource_id
+  http_method             = aws_api_gateway_method.create_product.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.create_product.invoke_arn
+}
+
+resource "aws_lambda_permission" "create_product" {
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.create_product.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.product.execution_arn}/*/POST/product"
+}
+```
+
+### TESTING
+
+```
+curl https://tq107g74c1.execute-api.eu-central-1.amazonaws.com/dev/product?product_id=6
+```
+
+```
+{
+"product_rating": 4,
+"product_name": "<<Product Name>>",
+"product_price": 12,
+"category": "Category",
+"product_description": "Product description",
+"product_id": "6"
+}
+```
