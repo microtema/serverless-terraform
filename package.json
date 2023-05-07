@@ -1,0 +1,17 @@
+{
+  "name": "serverless-terraform",
+  "version": "1.0.0",
+  "description": "Serverless computing is a cloud computing model in which a cloud provider allocates compute resources on demand. This contrasts with traditional cloud computing where the user is responsible for directly managing virtual servers.",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "microtema",
+  "license": "ISC",
+  "dependencies": {
+    "aws-sdk": "^2.1373.0"
+  }
+}
