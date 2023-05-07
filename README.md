@@ -13,7 +13,7 @@ Personally I use it to provide and maintain infrastructure on AWS. And I’ve ha
 
 I will demonstrate IaC by working out an example. 
 We are going to set up an application on AWS. 
-I provisioned the code on GitLab: https://github.com/microtema/serverless-terraform.git
+I provisioned the code on GitHub: https://github.com/microtema/serverless-terraform.git
 A user can enter a coding tip and see all the coding tips that other users have entered. 
 The tips are stored in a NoSQL database which is AWS DynamoDB. 
 Storing and retrieving these tips is done by the Lambda Functions which fetch or put the tips from and to the database. For the application to be useful, users have to be able to call these Lambda Functions. So we expose the Lambda Functions through AWS API Gateway. 
@@ -126,7 +126,7 @@ You are welcome to follow along by cloning the repository that I linked to in th
 
 * Install Terraform
 * Install AWS CLI
-* Checkout the repository on GitLab: https://github.com/microtema/serverless-terraform.git
+* Checkout the repository on GitHub: https://github.com/microtema/serverless-terraform.git
 * Be ready to get your mind blown by IaC
 
 #### Terraform Basic
