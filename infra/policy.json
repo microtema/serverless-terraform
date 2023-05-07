@@ -16,9 +16,7 @@
         "dynamodb:PutItem",
         "dynamodb:GetItem",
         "dynamodb:DeleteItem",
-        "dynamodb:Scan",
-        "dynamodb:Query",
-        "dynamodb:*"
+        "dynamodb:Query"
       ],
       "Resource": "arn:aws:dynamodb:*:*:table/PRODUCT"
     }
