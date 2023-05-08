@@ -191,7 +191,7 @@ Since Dynamo is a NoSQL database, we don’t have to specify all attributes upfr
 
 > DynamoDB uses the partition key value as input to an internal hash function. The output from the hash function determines the partition (physical storage internal to DynamoDB) in which the item will be stored. All items with the same partition key value are stored together, in sorted order by sort key value. – from AWS docs: DynamoDB Core Components
 
-From the attribute definitions in dynamo.tf it is clear that category (S) is a string and Date (N) should be a number.
+From the attribute definitions in main.tf it is clear that category (S) is a string and Date (N) should be a number.
 
 ### IAM
 
