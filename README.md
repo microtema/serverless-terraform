@@ -445,7 +445,7 @@ resource "aws_lambda_permission" "create_product" {
 ```
 curl -X POST "https://tq107g74c1.execute-api.eu-central-1.amazonaws.com/dev/product" -H 'Content-Type: application/json' -d'
 {
-  "product_dd": "1",
+  "product_id": "1",
   "category": "Category",
   "product_name": "<<Product Name>>",
   "product_price": 12,
@@ -462,7 +462,7 @@ curl https://tq107g74c1.execute-api.eu-central-1.amazonaws.com/dev/product?produ
 
 ```
 {
-  "product_dd": "1",
+  "product_id": "1",
   "category": "Category",
   "product_name": "<<Product Name>>",
   "product_price": 12,
