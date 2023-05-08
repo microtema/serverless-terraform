@@ -440,17 +440,33 @@ resource "aws_lambda_permission" "create_product" {
 
 ### TESTING
 
+#### Create a product
+
 ```
-curl https://tq107g74c1.execute-api.eu-central-1.amazonaws.com/dev/product?product_id=6
+curl -X POST "https://tq107g74c1.execute-api.eu-central-1.amazonaws.com/dev/product" -H 'Content-Type: application/json' -d'
+{
+  "product_dd": "1",
+  "category": "Category",
+  "product_name": "<<Product Name>>",
+  "product_price": 12,
+  "product_description": "Product description",
+  "product_rating": 2
+}
+‘
+```
+
+#### Get a product
+```
+curl https://tq107g74c1.execute-api.eu-central-1.amazonaws.com/dev/product?product_id=1
 ```
 
 ```
 {
-"product_rating": 4,
-"product_name": "<<Product Name>>",
-"product_price": 12,
-"category": "Category",
-"product_description": "Product description",
-"product_id": "6"
+  "product_dd": "1",
+  "category": "Category",
+  "product_name": "<<Product Name>>",
+  "product_price": 12,
+  "product_description": "Product description",
+  "product_rating": 2
 }
 ```
