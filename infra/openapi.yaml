@@ -5,7 +5,7 @@ info:
   description: API defining the operations available in the Product API
   version: 0.1.0
 servers:
-  - url: "https://microtema.de"
+  - url: "https://mj0nl4ja63.execute-api.eu-central-1.amazonaws.com/dev"
     description: Production API endpoint for the Product API
 
 components:
