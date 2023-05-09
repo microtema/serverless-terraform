@@ -286,15 +286,89 @@ resource "aws_lambda_permission" "delete_product" {
   source_arn    = "${aws_api_gateway_rest_api.product.execution_arn}/*/DELETE/product/*"
 }
 
+## API KEY
+resource "aws_api_gateway_api_key" "dev" {
+  name = "dev-product"
+}
+
+resource "aws_api_gateway_usage_plan_key" "dev" {
+  key_id        = aws_api_gateway_api_key.dev.id
+  key_type      = "API_KEY"
+  usage_plan_id = aws_api_gateway_usage_plan.dev.id
+}
+
+# dev
+resource "aws_api_gateway_usage_plan" "dev" {
+  name         = "dev-usage-plan"
+  description  = "dev usage plan for product api"
+  product_code = "product"
+
+  api_stages {
+    api_id = aws_api_gateway_rest_api.product.id
+    stage  = aws_api_gateway_stage.dev.stage_name
+  }
+
+  quota_settings {
+    limit  = 1000
+    offset = 0
+    period = "DAY"
+  }
+
+  throttle_settings {
+    burst_limit = 20
+    rate_limit  = 100
+  }
+}
+
+
+
+# prod
+resource "aws_api_gateway_api_key" "prod" {
+  name = "prod-product"
+}
+
+resource "aws_api_gateway_usage_plan_key" "prod" {
+  key_id        = aws_api_gateway_api_key.prod.id
+  key_type      = "API_KEY"
+  usage_plan_id = aws_api_gateway_usage_plan.prod.id
+}
+
+resource "aws_api_gateway_usage_plan" "prod" {
+  name         = "prod-usage-plan"
+  description  = "prod usage plan for product api"
+  product_code = "product"
+
+  api_stages {
+    api_id = aws_api_gateway_rest_api.product.id
+    stage  = aws_api_gateway_stage.prod.stage_name
+  }
+
+  quota_settings {
+    limit  = 3000
+    offset = 0
+    period = "DAY"
+  }
+
+  throttle_settings {
+    burst_limit = 30
+    rate_limit  = 300
+  }
+}
+
 # Deploy REST API
 resource "aws_api_gateway_deployment" "product" {
   depends_on  = []
   rest_api_id = aws_api_gateway_rest_api.product.id
-  stage_name  = "dev"
 }
 
-resource "aws_api_gateway_stage" "stage" {
+resource "aws_api_gateway_stage" "dev" {
   deployment_id = aws_api_gateway_deployment.product.id
   rest_api_id   = aws_api_gateway_rest_api.product.id
-  stage_name    = "stage"
+  stage_name    = "dev"
+}
+
+resource "aws_api_gateway_stage" "prod" {
+  deployment_id = aws_api_gateway_deployment.product.id
+  rest_api_id   = aws_api_gateway_rest_api.product.id
+  stage_name    = "prod"
 }

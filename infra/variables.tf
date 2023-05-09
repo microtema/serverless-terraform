@@ -12,7 +12,7 @@ variable "lambda_identity_timeout" {
   description = "Lambda Identy timeout"
 
   type    = number
-  default = 1000
+  default = 2000
 }
 variable "table_name" {
 

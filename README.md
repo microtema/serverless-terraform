@@ -117,6 +117,19 @@ CloudWatch supports a wide range of features, including:
 
 CloudWatch can be accessed using a variety of APIs and SDKs, including the AWS Management Console, the AWS CLI, and the AWS SDKs for popular programming languages such as Node.js, Python, Java, and more. CloudWatch provides a powerful and flexible monitoring and observability service that is essential for operating and maintaining modern cloud applications and infrastructure.
 
+### API Keys
+
+
+... are a type of authentication mechanism used in Amazon API Gateway, which is a fully managed service that makes it easy for developers to create, publish, and manage APIs at any scale.
+
+API keys are unique identifiers that are used to authenticate and control access to an API. When enabled, API key authorization requires clients to provide an API key in each request to an API in order to access the protected resources.
+
+AWS API keys can be generated and managed within the Amazon API Gateway console or via the API Gateway REST API. API keys can be assigned usage plans, which specify quotas and rate limits on API usage, and can be revoked or regenerated as needed.
+
+In addition, API keys can be integrated with AWS Identity and Access Management (IAM), which allows for fine-grained access control and management of API keys within an AWS account. IAM policies can be used to grant or restrict access to specific APIs, methods, or resources based on the associated API key.
+
+Overall, AWS API keys provide an important layer of security and access control for APIs built with Amazon API Gateway, and are widely used in modern cloud-based architectures to enforce security and usage policies.
+
 ## Create Application
 
 We will now go over the steps to set up the application you see in the demo above. IaC is the main focus. I will show the code and AWS CLI commands that are necessary but I will not explain them in detail since that is not the purpose of this blog. I’ll focus on the Terraform definitions instead. 
