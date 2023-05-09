@@ -10,8 +10,11 @@ module.exports.handler = async (event) => {
 
     try {
         await docClient.put(params).promise();
-        return {body: 'Successfully created item!'}
+        return {
+            statusCode: 201,
+            body: JSON.stringify({message: 'Successfully created item!'})
+        }
     } catch (e) {
-        return {error: "Unable to create document!", message: e.message}
+        return {error: "Unable to create product!", message: e.message}
     }
 }

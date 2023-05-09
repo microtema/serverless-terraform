@@ -6,16 +6,16 @@ module.exports.handler = async (event) => {
 
     const params = {
         TableName,
-        Key: {...event.queryStringParameters}
+        Key: {...event.pathParameters}
     }
 
     try {
-        await docClient.delete(params).promise()
+        const data = await docClient.get(params).promise()
         return {
             statusCode: 200,
-            body: JSON.stringify({message: "Item Deleted"}),
-        };
+            body: JSON.stringify(data.Item)
+        }
     } catch (e) {
-        return {error: "Unable to delete document!", message: e.message}
+        return {error: "Unable to get document!", message: e.message}
     }
 }

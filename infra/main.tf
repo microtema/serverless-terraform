@@ -9,7 +9,7 @@ provider "aws" {
 }
 
 resource "random_pet" "product" {
-  prefix = "microtema"
+  prefix = "product"
   length = 4
 }
 
@@ -49,6 +49,17 @@ resource "aws_iam_role_policy_attachment" "product" {
 # create aws s3 bucket
 resource "aws_s3_bucket" "product" {
   bucket = random_pet.product.id
+  tags = {
+    Name        = "Product API CRUD operations"
+    Environment = "dev"
+  }
+}
+
+resource "aws_s3_bucket_versioning" "product" {
+  bucket = aws_s3_bucket.product.id
+  versioning_configuration {
+    status = "Enabled"
+  }
 }
 
 # Resource to avoid error "AccessControlListNotSupported: The bucket does not allow ACLs"
@@ -85,16 +96,17 @@ resource "aws_s3_object" "product" {
 # Create Product
 resource "aws_lambda_function" "create_product" {
   function_name = "CreateProduct"
+  description = "Create a Product"
 
   s3_bucket = aws_s3_bucket.product.id
   s3_key    = aws_s3_object.product.key
 
-  runtime = "nodejs12.x"
-  handler = "createDocument.handler"
+  runtime = var.node_runtime
+  handler = "createProduct.handler"
 
   environment {
     variables = {
-      TABLE_NAME = "PRODUCT"
+      TABLE_NAME = var.table_name
     }
   }
 
@@ -111,16 +123,17 @@ resource "aws_cloudwatch_log_group" "create_product" {
 
 # Get Product
 resource "aws_lambda_function" "get_product" {
-  function_name = "GetDocument"
+  function_name = "GetProduct"
+  description = "Get a Product by Product ID"
 
   s3_bucket = aws_s3_bucket.product.id
   s3_key    = aws_s3_object.product.key
 
-  runtime = "nodejs12.x"
-  handler = "getDocument.handler"
+  runtime = var.node_runtime
+  handler = "getProduct.handler"
   environment {
     variables = {
-      TABLE_NAME = "PRODUCT"
+      TABLE_NAME = var.table_name
     }
   }
 
@@ -137,16 +150,17 @@ resource "aws_cloudwatch_log_group" "get_product" {
 
 # Query Product
 resource "aws_lambda_function" "query_product" {
-  function_name = "QueryDocument"
+  function_name = "QueryProduct"
+  description = "Search products by filter"
 
   s3_bucket = aws_s3_bucket.product.id
   s3_key    = aws_s3_object.product.key
 
-  runtime = "nodejs12.x"
-  handler = "queryDocument.handler"
+  runtime = var.node_runtime
+  handler = "queryProduct.handler"
   environment {
     variables = {
-      TABLE_NAME = "PRODUCT"
+      TABLE_NAME = var.table_name
     }
   }
 
@@ -163,16 +177,17 @@ resource "aws_cloudwatch_log_group" "query_product" {
 
 # Delete Product
 resource "aws_lambda_function" "delete_product" {
-  function_name = "DeleteDocument"
+  function_name = "DeleteProduct"
+  description = "Delete a Product by given product ID"
 
   s3_bucket = aws_s3_bucket.product.id
   s3_key    = aws_s3_object.product.key
 
-  runtime = "nodejs12.x"
-  handler = "deleteDocument.handler"
+  runtime = var.node_runtime
+  handler = "deleteProduct.handler"
   environment {
     variables = {
-      TABLE_NAME = "PRODUCT"
+      TABLE_NAME = var.table_name
     }
   }
 
@@ -187,19 +202,31 @@ resource "aws_cloudwatch_log_group" "delete_product" {
   retention_in_days = 7
 }
 
-# REST API
-resource "aws_api_gateway_rest_api" "product" {
-  name        = "product"
-  description = "Product API Gateway"
-  endpoint_configuration {
-    types = ["REGIONAL"]
+data "template_file" "product" {
+
+  template = file("${path.module}/openapi.yaml")
+
+  vars = {
+    get_product_lambda_arn  = aws_lambda_function.get_product.arn
+    delete_product_lambda_arn = aws_lambda_function.delete_product.arn
+    create_product_lambda_arn = aws_lambda_function.create_product.arn
+    query_product_lambda_arn = aws_lambda_function.query_product.arn
+
+    aws_region              = var.aws_region
+    lambda_identity_timeout = var.lambda_identity_timeout
   }
 }
 
-resource "aws_api_gateway_resource" "product" {
-  rest_api_id = aws_api_gateway_rest_api.product.id
-  parent_id   = aws_api_gateway_rest_api.product.root_resource_id
-  path_part   = "product"
+resource "aws_api_gateway_rest_api" "product" {
+  name           = "product"
+  description    = "Product OPEN API Gateway"
+  api_key_source = "HEADER"
+
+  endpoint_configuration {
+    types = ["REGIONAL"]
+  }
+
+  body = data.template_file.product.rendered
 }
 
 resource "aws_dynamodb_table" "product_table" {
@@ -229,22 +256,6 @@ resource "aws_dynamodb_table" "product_table" {
 }
 
 # Create product
-resource "aws_api_gateway_method" "create_product" {
-  rest_api_id   = aws_api_gateway_rest_api.product.id
-  resource_id   = aws_api_gateway_resource.product.id
-  http_method   = "POST"
-  authorization = "NONE"
-}
-
-resource "aws_api_gateway_integration" "create_product" {
-  rest_api_id             = aws_api_gateway_rest_api.product.id
-  resource_id             = aws_api_gateway_method.create_product.resource_id
-  http_method             = aws_api_gateway_method.create_product.http_method
-  integration_http_method = "POST"
-  type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.create_product.invoke_arn
-}
-
 resource "aws_lambda_permission" "create_product" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.create_product.function_name
@@ -252,102 +263,34 @@ resource "aws_lambda_permission" "create_product" {
   source_arn    = "${aws_api_gateway_rest_api.product.execution_arn}/*/POST/product"
 }
 
-# Get product
-resource "aws_api_gateway_method" "get_product" {
-  rest_api_id   = aws_api_gateway_rest_api.product.id
-  resource_id   = aws_api_gateway_resource.product.id
-  http_method   = "GET"
-  authorization = "NONE"
-}
-
-# https://stackoverflow.com/questions/41371970/accessdeniedexception-unable-to-determine-service-operation-name-to-be-authoriz
-# Using GET for lambda integrations on AWS API Gateway may leave you wondering why POST integrations are working but GET integrations don't work.
-# GET AWS_PROXY integrations will fail if GET is used as the method on the integration.
-# POST should be used for the lambda integration, even if the OPEN API specification is for a get method.
-resource "aws_api_gateway_integration" "get_product" {
-  rest_api_id             = aws_api_gateway_rest_api.product.id
-  resource_id             = aws_api_gateway_resource.product.id
-  http_method             = aws_api_gateway_method.get_product.http_method
-  integration_http_method = "POST"
-  type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.get_product.invoke_arn
-}
-
 resource "aws_lambda_permission" "get_product" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.get_product.function_name
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_api_gateway_rest_api.product.execution_arn}/*/GET/product"
+  source_arn    = "${aws_api_gateway_rest_api.product.execution_arn}/*/GET/product/*"
 }
 
 # Query product
-resource "aws_api_gateway_method" "query_product" {
-  rest_api_id   = aws_api_gateway_rest_api.product.id
-  resource_id   = aws_api_gateway_resource.product.id
-  http_method   = "PATCH"
-  authorization = "NONE"
-}
-
-# https://stackoverflow.com/questions/41371970/accessdeniedexception-unable-to-determine-service-operation-name-to-be-authoriz
-# Using GET for lambda integrations on AWS API Gateway may leave you wondering why POST integrations are working but GET integrations don't work.
-# GET AWS_PROXY integrations will fail if GET is used as the method on the integration.
-# POST should be used for the lambda integration, even if the OPEN API specification is for a get method.
-resource "aws_api_gateway_integration" "query_product" {
-  rest_api_id             = aws_api_gateway_rest_api.product.id
-  resource_id             = aws_api_gateway_resource.product.id
-  http_method             = aws_api_gateway_method.query_product.http_method
-  integration_http_method = "POST"
-  type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.query_product.invoke_arn
-}
-
 resource "aws_lambda_permission" "query_product" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.query_product.function_name
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_api_gateway_rest_api.product.execution_arn}/*/PATCH/product"
+  source_arn    = "${aws_api_gateway_rest_api.product.execution_arn}/*/GET/product"
 }
 
 # Delete product
-resource "aws_api_gateway_method" "delete_product" {
-  rest_api_id   = aws_api_gateway_rest_api.product.id
-  resource_id   = aws_api_gateway_resource.product.id
-  http_method   = "DELETE"
-  authorization = "NONE"
-}
-
-resource "aws_api_gateway_integration" "delete_product" {
-  rest_api_id             = aws_api_gateway_rest_api.product.id
-  resource_id             = aws_api_gateway_method.delete_product.resource_id
-  http_method             = aws_api_gateway_method.delete_product.http_method
-  integration_http_method = "POST"
-  type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.delete_product.invoke_arn
-}
-
 resource "aws_lambda_permission" "delete_product" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.delete_product.function_name
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_api_gateway_rest_api.product.execution_arn}/*/DELETE/product"
+  source_arn    = "${aws_api_gateway_rest_api.product.execution_arn}/*/DELETE/product/*"
 }
 
-# deploy REST API
+# Deploy REST API
 resource "aws_api_gateway_deployment" "product" {
-  depends_on = [
-    aws_api_gateway_integration.create_product,
-    aws_api_gateway_integration.get_product,
-    aws_api_gateway_integration.query_product,
-    aws_api_gateway_integration.delete_product
-  ]
+  depends_on  = []
   rest_api_id = aws_api_gateway_rest_api.product.id
   stage_name  = "dev"
-}
-
-resource "aws_api_gateway_stage" "prod" {
-  deployment_id = aws_api_gateway_deployment.product.id
-  rest_api_id   = aws_api_gateway_rest_api.product.id
-  stage_name    = "prod"
 }
 
 resource "aws_api_gateway_stage" "stage" {

@@ -15,7 +15,10 @@ module.exports.handler = async (event) => {
 
     try {
         const data = await docClient.query(params).promise()
-        return {body: JSON.stringify(data.Items)}
+        return {
+            statusCode: 200,
+            body: JSON.stringify(data.Items)
+        }
     } catch (e) {
         return {error: "Unable to query document!", message: e.message}
     }
