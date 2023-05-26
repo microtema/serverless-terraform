@@ -49,7 +49,7 @@ resource "aws_iam_role_policy_attachment" "product" {
 # create aws s3 bucket
 resource "aws_s3_bucket" "product" {
   bucket = random_pet.product.id
-  tags = {
+  tags   = {
     Name        = "Product API CRUD operations"
     Environment = "dev"
   }
@@ -79,7 +79,7 @@ resource "aws_s3_bucket_acl" "product" {
 
 data "archive_file" "product" {
   type        = "zip"
-  source_dir  = "${path.module}/../src"
+  source_dir  = "${path.module}/../api"
   output_path = "${path.module}/../lib/product.zip"
 }
 
@@ -96,13 +96,13 @@ resource "aws_s3_object" "product" {
 # Create Product
 resource "aws_lambda_function" "create_product" {
   function_name = "CreateProduct"
-  description = "Create a Product"
+  description   = "Create a Product"
 
   s3_bucket = aws_s3_bucket.product.id
   s3_key    = aws_s3_object.product.key
 
   runtime = var.node_runtime
-  handler = "createProduct.handler"
+  handler = "src/createProduct.handler"
 
   environment {
     variables = {
@@ -124,13 +124,13 @@ resource "aws_cloudwatch_log_group" "create_product" {
 # Get Product
 resource "aws_lambda_function" "get_product" {
   function_name = "GetProduct"
-  description = "Get a Product by Product ID"
+  description   = "Get a Product by Product ID"
 
   s3_bucket = aws_s3_bucket.product.id
   s3_key    = aws_s3_object.product.key
 
   runtime = var.node_runtime
-  handler = "getProduct.handler"
+  handler = "src/getProduct.handler"
   environment {
     variables = {
       TABLE_NAME = var.table_name
@@ -151,13 +151,13 @@ resource "aws_cloudwatch_log_group" "get_product" {
 # Query Product
 resource "aws_lambda_function" "query_product" {
   function_name = "QueryProduct"
-  description = "Search products by filter"
+  description   = "Search products by filter"
 
   s3_bucket = aws_s3_bucket.product.id
   s3_key    = aws_s3_object.product.key
 
   runtime = var.node_runtime
-  handler = "queryProduct.handler"
+  handler = "src/queryProduct.handler"
   environment {
     variables = {
       TABLE_NAME = var.table_name
@@ -178,13 +178,13 @@ resource "aws_cloudwatch_log_group" "query_product" {
 # Delete Product
 resource "aws_lambda_function" "delete_product" {
   function_name = "DeleteProduct"
-  description = "Delete a Product by given product ID"
+  description   = "Delete a Product by given product ID"
 
   s3_bucket = aws_s3_bucket.product.id
   s3_key    = aws_s3_object.product.key
 
   runtime = var.node_runtime
-  handler = "deleteProduct.handler"
+  handler = "src/deleteProduct.handler"
   environment {
     variables = {
       TABLE_NAME = var.table_name
@@ -202,15 +202,46 @@ resource "aws_cloudwatch_log_group" "delete_product" {
   retention_in_days = 7
 }
 
+# Authenticate Product
+resource "aws_lambda_function" "auth_product" {
+  function_name = "Authenticate_Product"
+
+  s3_bucket = aws_s3_bucket.product.id
+  s3_key    = aws_s3_object.product.key
+
+  runtime = "nodejs12.x"
+  handler = "src/authenticate.handler"
+
+  environment {
+    variables = {
+      TABLE_NAME = "PRODUCT"
+    }
+  }
+
+  source_code_hash = data.archive_file.product.output_base64sha256
+
+  role = aws_iam_role.product.arn
+}
+
+resource "aws_cloudwatch_log_group" "auth_product" {
+  name = "/aws/lambda/${aws_lambda_function.auth_product.function_name}"
+
+  retention_in_days = 7
+}
+
 data "template_file" "product" {
+
+  depends_on = [aws_cognito_user_pool.product]
 
   template = file("${path.module}/openapi.yaml")
 
   vars = {
-    get_product_lambda_arn  = aws_lambda_function.get_product.arn
+    get_product_lambda_arn    = aws_lambda_function.get_product.arn
     delete_product_lambda_arn = aws_lambda_function.delete_product.arn
     create_product_lambda_arn = aws_lambda_function.create_product.arn
-    query_product_lambda_arn = aws_lambda_function.query_product.arn
+    query_product_lambda_arn  = aws_lambda_function.query_product.arn
+    auth_product_lambda_arn  = aws_lambda_function.auth_product.arn
+    cognito_user_pool_arn = aws_cognito_user_pool.product.arn
 
     aws_region              = var.aws_region
     lambda_identity_timeout = var.lambda_identity_timeout
@@ -286,6 +317,14 @@ resource "aws_lambda_permission" "delete_product" {
   source_arn    = "${aws_api_gateway_rest_api.product.execution_arn}/*/DELETE/product/*"
 }
 
+# Auth product
+resource "aws_lambda_permission" "aauth_product" {
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.auth_product.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.product.execution_arn}/*/*"
+}
+
 ## API KEY
 resource "aws_api_gateway_api_key" "dev" {
   name = "dev-product"
@@ -319,7 +358,6 @@ resource "aws_api_gateway_usage_plan" "dev" {
     rate_limit  = 100
   }
 }
-
 
 
 # prod
@@ -372,3 +410,18 @@ resource "aws_api_gateway_stage" "prod" {
   rest_api_id   = aws_api_gateway_rest_api.product.id
   stage_name    = "prod"
 }
+
+resource "aws_cognito_user_pool" "product" {
+  name = "product"
+  username_configuration {
+    case_sensitive = false
+  }
+}
+resource "aws_cognito_user_pool_client" "product" {
+  name                = "product"
+  user_pool_id        = aws_cognito_user_pool.product.id
+  explicit_auth_flows = ["ALLOW_USER_PASSWORD_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"]
+}
+
+
+

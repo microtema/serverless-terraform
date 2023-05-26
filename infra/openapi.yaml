@@ -41,6 +41,15 @@ components:
       type: apiKey
       name: x-api-key
       in: header
+    EndpointAuthorizer:
+      type: apiKey
+      name: Authorization
+      in: header
+      x-amazon-apigateway-authtype: cognito_user_pools
+      x-amazon-apigateway-authorizer:
+        type: cognito_user_pools
+        providerARNs:
+          - "${cognito_user_pool_arn}"
 
 paths:
   /product/{product_id}:
@@ -103,6 +112,29 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Message"
+  /auth:
+    get:
+      operationId: Authenticate
+      description: Authenticate
+      security:
+        - EndpointAuthorizer: [ ]
+      x-amazon-apigateway-integration:
+        uri: "arn:aws:apigateway:${aws_region}:lambda:path/2015-03-31/functions/${auth_product_lambda_arn}/invocations"
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        timeoutInMillis: ${lambda_identity_timeout}
+        type: "aws_proxy"
+        contentHandling: "CONVERT_TO_TEXT"
+      x-amazon-apigateway-auth:
+        type: "COGNITO_USER_POOLS"
+      x-amazon-apigateway-api-key-source: "HEADER"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
   /product:
     post:
       operationId: createProduct
@@ -160,6 +192,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Products"
-
 security:
   - ApiKeyAuth: [ ]
+  - EndpointAuthorizer: [ ]
