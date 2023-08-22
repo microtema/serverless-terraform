@@ -1,0 +1,16 @@
+== Introduction and Goals
+
+Describes the relevant requirements and the driving forces that software architects and development team must consider. These include
+
+=== Requirements Overview
+
+Short description of the functional requirements, driving forces, extract (or abstract) of requirements.
+Links to the (hopefully existing) requirements documents, with information where to find it.
+
+=== Quality Goals
+
+Inherited from bootstrap
+
+=== Stakeholders
+
+Inherited from bootstrap

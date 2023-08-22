@@ -1,0 +1,62 @@
+= DoC MS Customer Service
+
+:imagesdir: ./docs
+
+:numbered:
+
+ifdef::safe-mode-secure[]
+== Introduction and Goals
+endif::safe-mode-secure[]
+
+include::docs/01_introduction_and_goals.adoc[]
+
+== Constraints
+
+Inherited from bootstrap
+
+ifdef::safe-mode-secure[]
+== Context and Scope
+endif::safe-mode-secure[]
+
+include::docs/03_system_scope_and_context.adoc[]
+
+== Solution Strategy
+
+Inherited from bootstrap
+
+ifdef::safe-mode-secure[]
+== Context and Scope
+endif::safe-mode-secure[]
+
+include::docs/05_building_block_view.adoc[]
+
+ifdef::safe-mode-secure[]
+== Runtime View
+endif::safe-mode-secure[]
+
+include::docs/06_runtime_view.adoc[]
+
+== Deployment View
+
+Inherited from bootstrap
+
+== Crosscutting Concepts
+
+Inherited from bootstrap
+
+== Architectural Decisions
+
+Inherited from bootstrap
+
+== Quality Requirements
+
+Inherited from bootstrap
+
+== Risks and Technical Debt
+
+Inherited from bootstrap
+
+== Glossary
+
+Inherited from bootstrap
+

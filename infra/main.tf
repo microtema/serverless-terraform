@@ -121,6 +121,34 @@ resource "aws_cloudwatch_log_group" "create_product" {
   retention_in_days = 7
 }
 
+# Product Created
+resource "aws_lambda_function" "product_created" {
+  function_name = "ProductCreated"
+  description   = "Product Created"
+
+  s3_bucket = aws_s3_bucket.product.id
+  s3_key    = aws_s3_object.product.key
+
+  runtime = var.node_runtime
+  handler = "src/productCreated.handler"
+
+  environment {
+    variables = {
+      TABLE_NAME = var.table_name
+    }
+  }
+
+  source_code_hash = data.archive_file.product.output_base64sha256
+
+  role = aws_iam_role.product.arn
+}
+
+resource "aws_cloudwatch_log_group" "product_created" {
+  name = "/aws/lambda/${aws_lambda_function.product_created.function_name}"
+
+  retention_in_days = 7
+}
+
 # Get Product
 resource "aws_lambda_function" "get_product" {
   function_name = "GetProduct"
@@ -209,7 +237,7 @@ resource "aws_lambda_function" "auth_product" {
   s3_bucket = aws_s3_bucket.product.id
   s3_key    = aws_s3_object.product.key
 
-  runtime = "nodejs12.x"
+  runtime = var.node_runtime
   handler = "src/authenticate.handler"
 
   environment {
@@ -264,6 +292,8 @@ resource "aws_dynamodb_table" "product_table" {
   name         = "PRODUCT"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "product_id"
+  stream_enabled = true
+  stream_view_type = "NEW_AND_OLD_IMAGES"
 
   attribute {
     name = "product_id"
@@ -286,7 +316,13 @@ resource "aws_dynamodb_table" "product_table" {
   }
 }
 
-# Create product
+resource "aws_lambda_event_source_mapping" "dynamodb_trigger" {
+  event_source_arn  = aws_dynamodb_table.product_table.stream_arn
+  function_name     = aws_lambda_function.product_created.arn
+  starting_position = "LATEST"
+}
+
+# Create product permission
 resource "aws_lambda_permission" "create_product" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.create_product.function_name
@@ -294,6 +330,7 @@ resource "aws_lambda_permission" "create_product" {
   source_arn    = "${aws_api_gateway_rest_api.product.execution_arn}/*/POST/product"
 }
 
+# Get product permission
 resource "aws_lambda_permission" "get_product" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.get_product.function_name
@@ -301,7 +338,7 @@ resource "aws_lambda_permission" "get_product" {
   source_arn    = "${aws_api_gateway_rest_api.product.execution_arn}/*/GET/product/*"
 }
 
-# Query product
+# Query product permission
 resource "aws_lambda_permission" "query_product" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.query_product.function_name
@@ -309,7 +346,7 @@ resource "aws_lambda_permission" "query_product" {
   source_arn    = "${aws_api_gateway_rest_api.product.execution_arn}/*/GET/product"
 }
 
-# Delete product
+# Delete product permission
 resource "aws_lambda_permission" "delete_product" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.delete_product.function_name
@@ -317,8 +354,8 @@ resource "aws_lambda_permission" "delete_product" {
   source_arn    = "${aws_api_gateway_rest_api.product.execution_arn}/*/DELETE/product/*"
 }
 
-# Auth product
-resource "aws_lambda_permission" "aauth_product" {
+# Auth product permission
+resource "aws_lambda_permission" "auth_product" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.auth_product.function_name
   principal     = "apigateway.amazonaws.com"

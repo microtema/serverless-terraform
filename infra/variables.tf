@@ -27,5 +27,5 @@ variable "node_runtime" {
 
   description = "NodeJS runtime version"
   type = string
-  default = "nodejs12.x"
+  default = "nodejs14.x"
 }

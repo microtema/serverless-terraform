@@ -14,3 +14,6 @@ output "cognito_user_pool_arn" {
 output "user_pool_client_id" {
   value = aws_cognito_user_pool_client.product.id
 }
+output "product_table_arn" {
+  value = aws_dynamodb_table.product_table.arn
+}
